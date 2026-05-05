@@ -1,4 +1,19 @@
-echo ".venv/" >> .gitignore
-echo "__pycache__/" >> .gitignore
-echo "*.pyc" >> .gitignore
-echo ".DS_Store" >> .gitignore
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE Settings (PyCharm / IntelliJ)
+.idea/
+
+# macOS System Files
+.DS_Store
+
+# Local Neo4j / Docker Müll (falls vorhanden)
+*.log
