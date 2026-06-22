@@ -1,14 +1,27 @@
 #!/bin/zsh
 # URMOSES Ressourcen-Manager
 
-# 1. Ollama-Check & Extraktion
-echo "Starte Extraktion..."
-# Hier dein Python Script, das NUR Ollama nutzt und in Datei schreibt
-# Danach Ollama killen um RAM freizugeben
-killall Ollama
-
-# 2. Neo4j-Check & Import
-echo "Starte Neo4j..."
+echo "=== Schritt 1: Neo4j-Urmoses Container aktivieren ==="
 docker start neo4j-urmoses
-sleep 10 # Warten bis DB bereit
-# Hier dein Python Script, das NUR die Datei in Neo4j schiebt
+sleep 5
+
+echo "\n=== Schritt 2: Lokalen Ollama-Server im Hintergrund starten & Modell laden ==="
+nohup ollama serve > /dev/null 2>&1 &
+sleep 5
+ollama pull nomic-embed-text
+ollama pull phi3:mini
+
+echo "\n=== Schritt 3: Echte Embeddings & Imports generieren ==="
+# ChatEinlesen.py übernimmt das saubere PDF-Parsing inklusive Embeddings
+python3 src/ChatEinlesen.py
+# Hier betten wir direkt dein neues Brainstorming-Skript für die LA-Artefakte ein
+python3 src/BrainstormingEinlesen.py
+
+echo "\n=== Schritt 4: Mathematischen und semantischen Abgleich starten ==="
+python3 src/WissenVerknuepfen.py
+
+echo "\n=== Schritt 5: Lokalen Ollama-Server stoppen ==="
+killall ollama
+
+echo "\n=== Schritt 6: Pipeline-Validierung über Integrationstest ==="
+python3 test/GraphTest.py

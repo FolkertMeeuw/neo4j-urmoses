@@ -2,44 +2,58 @@ from py2neo import Graph
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
-# Verbindung zur Neo4j Instanz
 graph = Graph("bolt://localhost:7687", auth=("neo4j", "password"))
+
+print("=== Start: Mathematischer und semantischen Abgleich ===")
 
 print("Bereinige alte semantische Verknüpfungen...")
 graph.run("MATCH ()-[r:SEMANTICALLY_RELATED]->() DELETE r")
 
 print("Lade frische Vektoren aus der Datenbank...")
-chats = graph.run(
-    "MATCH (ch:ChatHistory) WHERE ch.embedding IS NOT NULL RETURN id(ch) as id, ch.name as name, ch.embedding as vec").data()
-chunks = graph.run("MATCH (c:Chunk) WHERE c.embedding IS NOT NULL RETURN id(c) as id, c.embedding as vec").data()
+nodes = graph.run(
+    """
+    MATCH (n) 
+    WHERE n.embedding IS NOT NULL 
+    RETURN id(n) as id, labels(n)[0] as label, n.text as text, n.embedding as vec, n.quelle as quelle
+    """
+).data()
 
-if not chats or not chunks:
-    print("Fehler: Keine Vektoren zum Vergleichen gefunden!")
+if len(nodes) < 2:
+    print(f"Fehler: Zu wenige Vektoren gefunden (Anzahl: {len(nodes)}).")
     exit()
 
-print(f"Starte mathematischen Abgleich: {len(chats)} Chats vs. {len(chunks)} PDF-Chunks...")
-
+print(f"Erfolgreich geladen: {len(nodes)} Knoten.")
 links_created = 0
-for chat in chats:
-    # Chat-Vektor vorbereiten
-    chat_vec = np.array(chat['vec'], dtype=np.float32).reshape(1, -1)
 
-    for chunk in chunks:
-        # Chunk-Vektor vorbereiten
-        chunk_vec = np.array(chunk['vec'], dtype=np.float32).reshape(1, -1)
+for i in range(len(nodes)):
+    vec_i = np.array(nodes[i]['vec'], dtype=np.float32).reshape(1, -1)
+    label_i = nodes[i]['label']
+    quelle_i = nodes[i].get('quelle', 'Unbekannt')
 
-        # Ähnlichkeit berechnen (0.0 bis 1.0)
-        score = float(cosine_similarity(chat_vec, chunk_vec)[0][0])
+    for j in range(i + 1, len(nodes)):
+        if nodes[i]['id'] == nodes[j]['id'] or (
+                nodes[i].get('quelle') and nodes[i]['quelle'] == nodes[j].get('quelle')):
+            continue
 
-        # Qualitätshürde: Nur Verknüpfungen über 0.4 Score erstellen
-        if score > 0.4:
-            graph.run("""
-                MATCH (ch), (c)
-                WHERE id(ch) = $ch_id AND id(c) = $c_id
-                MERGE (ch)-[r:SEMANTICALLY_RELATED]->(c)
-                SET r.score = $score
-            """, ch_id=chat['id'], c_id=chunk['id'], score=score)
+        vec_j = np.array(nodes[j]['vec'], dtype=np.float32).reshape(1, -1)
+        label_j = nodes[j]['label']
+
+        score = float(cosine_similarity(vec_i, vec_j)[0][0])
+
+        if score > 0.45:
+            reason_str = f"Mathematischer Match ({label_i} <-> {label_j})"
+            graph.run(
+                """
+                MATCH (a), (b)
+                WHERE id(a) = $id_a AND id(b) = $id_b
+                MERGE (a)-[r:SEMANTICALLY_RELATED]->(b)
+                SET r.score = $score, r.reason = $reason
+                """,
+                id_a=int(nodes[i]['id']),
+                id_b=int(nodes[j]['id']),
+                score=score,
+                reason=reason_str
+            )
             links_created += 1
 
-print(f"\nAbgeschlossen! {links_created} hochwertige semantische Beziehungen erstellt.")
-print("Du kannst die Ergebnisse jetzt in Safari mit den hohen Scores prüfen.")
+print(f"Abgeschlossen! {links_created} Beziehungen erstellt.")
