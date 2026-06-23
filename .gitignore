@@ -17,3 +17,9 @@ __pycache__/
 
 # Local Neo4j / Docker Müll (falls vorhanden)
 *.log
+
+# URMOSES Data Stores (Ignore content, keep structure)
+data/*
+!data/.gitkeep
+brainstorming_data/*
+!brainstorming_data/.gitkeep
